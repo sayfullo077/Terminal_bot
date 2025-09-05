@@ -1,0 +1,16 @@
+aiogram==3.4.0
+environs==11.0.0
+validators==0.34.0
+sqlalchemy==2.0.25
+python-dotenv
+asyncpg
+aiosqlite
+greenlet==3.1.1
+requests==2.32.3
+schedule==1.2.2
+aioredis==2.0.1
+sqlalchemy-utils==0.41.2
+alembic
+psycopg2-binary
+pillow
+httpx

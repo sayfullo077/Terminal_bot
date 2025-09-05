@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.env
+venv/
+# Windows
+Thumbs.db
+# macOS
+.DS_Store
+# IDEs and Editors
+.idea/
+.vscode/
+# Database
+*.sqlite3
+db.sqlite3
+# Logs
+*.log
+# Bot-specific
+/media/
+/files/

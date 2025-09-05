@@ -1,0 +1,26 @@
+.env
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+/env
+
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# Logs
+*.log
+
+# IDEs and Editors
+.idea/
+.vscode/
+
+# OS-generated files
+.DS_Store
+DS_Store
+Thumbs.db

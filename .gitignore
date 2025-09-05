@@ -1,12 +1,13 @@
+# Environment variables
 .env
+
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+
+# Virtual environments
 env/
 venv/
-/env
 
 # Database
 *.sqlite3
@@ -17,12 +18,8 @@ db.sqlite3
 
 # IDEs and Editors
 .idea/
-.idea
-/.idea
 .vscode/
 
 # OS-generated files
 .DS_Store
-/.DS_Store
-.DS_Store/
 Thumbs.db

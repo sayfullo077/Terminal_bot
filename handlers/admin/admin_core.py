@@ -35,14 +35,11 @@ def html_escape(text):
 
 
 @dp.message(Command('admin'))
-async def start_admin_panel(message: types.Message, session: AsyncSession):
+async def start_admin_panel(message: types.Message, state: FSMContext, session: AsyncSession):
     telegram_id = message.from_user.id
     is_bot_admin = str(telegram_id) in ADMINS
     assistant_admins = await get_admin_users(session)
     admin_ids = [admin_id for admin_id in assistant_admins]
-
-    print("DB_ADMINS: ", admin_ids)
-
     is_assistant_admin = telegram_id in admin_ids
     admin_btn = await admin_button()
     if is_bot_admin or is_assistant_admin:

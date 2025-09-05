@@ -10,6 +10,7 @@ from utils.password_generator import generate_unique_number
 from keyboards.inline.buttons import back_button, position_button, check_password_button, cashier_menu_button
 from database.orm_query import get_branch_id_by_company_id, select_user, orm_add_user, get_company_id_by_name, get_cashier_by_id, get_company_url_by_id, get_chief_cashier_by_id, get_pass_url_by_id, is_user_active
 from states.my_states import UserStart
+from data.config import ADMINS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
     telegram_id = message.from_user.id
     full_name = html_escape(message.from_user.full_name)
     user = await select_user(telegram_id, session)
-
+    is_bot_admin = str(telegram_id) in ADMINS
     if user is not None:
         await state.set_state(UserStart.start)
         is_active = await is_user_active(telegram_id, session)
@@ -37,10 +38,13 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
         else:
             await message.answer("Siz tizimga kirolmaysiz!\nAdmin bilan bog'laning /feedback")
     else:
-        await message.answer(
-            f"Assalomu alaykum {full_name}\n🏦 Bosh ofis nomini kiriting:"
-        )
-        await state.set_state(UserStart.is_active)
+        if is_bot_admin:
+            await state.clear()
+        else:
+            await message.answer(
+                f"Assalomu alaykum {full_name}\n🏦 Bosh ofis nomini kiriting:"
+            )
+            await state.set_state(UserStart.is_active)
 
 
 @dp.message(UserStart.is_active)

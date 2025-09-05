@@ -1,4 +1,5 @@
-import handlers, middlewares
+import handlers
+import middlewares
 from aiogram.types.bot_command_scope_all_private_chats import BotCommandScopeAllPrivateChats
 import asyncio
 import logging

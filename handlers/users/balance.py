@@ -9,7 +9,7 @@ from database.orm_query import select_user, get_terminals_url_by_id
 import httpx
 
 
-@dp.callback_query(F.data.startswith("balance_info"), or_f(UserStart.start, TransactionState.pending_chief_cashier))
+@dp.callback_query(F.data.startswith("balance_info"))
 async def balance_info(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
     telegram_id = call.from_user.id
     user = await select_user(telegram_id, session)

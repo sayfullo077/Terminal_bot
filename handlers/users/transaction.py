@@ -17,7 +17,7 @@ from database.orm_query import (
 import httpx
 
 
-@dp.callback_query(F.data.startswith("conclusion"), or_f(UserStart.start, TransactionState.pending_chief_cashier))
+@dp.callback_query(F.data.startswith("conclusion"))
 async def transaction_func(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
     telegram_id = call.from_user.id
     user = await select_user(telegram_id, session)

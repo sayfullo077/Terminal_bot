@@ -83,7 +83,7 @@ class CardTransaction(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     transaction_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # external id
     image: Mapped[str] = mapped_column(String(255), nullable=True)
-    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=True)
     comment: Mapped[str] = mapped_column(String(355), nullable=True)
     card_type: Mapped[CardType] = mapped_column(Enum(CardType), nullable=False)
     status_type: Mapped[StatusType] = mapped_column(Enum(StatusType), default=StatusType.PENDING)

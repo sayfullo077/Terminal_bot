@@ -14,6 +14,7 @@ from database.orm_query import (
     has_pending_transaction, get_branch_get_transaction_url_by_id, get_branch_confirm_transaction_url_by_id,
     delete_transaction_by_id
 )
+import decimal
 import httpx
 
 
@@ -158,7 +159,8 @@ async def transfer_amount_input(message: types.Message, state: FSMContext):
     source_cash_type = data.get('source_cash_type')
     source_cash_balance = data.get('source_cash_balance')
     try:
-        amount = int(message.text.strip())
+        amount = decimal.Decimal(message.text.strip())
+
         if amount <= 0:
             await message.answer("❗️ Iltimos, faqat musbat son kiriting")
             return

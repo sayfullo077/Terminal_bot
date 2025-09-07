@@ -5,7 +5,7 @@ from data.config import ADMINS
 async def start():
     for i in ADMINS:
         try:
-            await bot.send_message(chat_id=i,text="Bot faollashdi!")
+            await bot.send_message(chat_id=637914427,text="Bot faollashdi!")
 
         except:
             pass
@@ -14,7 +14,7 @@ async def start():
 async def shutdown():
     for i in ADMINS:
         try:
-            await bot.send_message(chat_id=i,text="Bot to'xtadi!")
+            await bot.send_message(chat_id=637914427,text="Bot to'xtadi!")
 
         except:
             pass

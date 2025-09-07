@@ -52,6 +52,11 @@ async def choose_company(message: types.Message, state: FSMContext, session: Asy
     telegram_id = message.from_user.id
     user = await select_user(telegram_id, session)
     msg_text = message.text.strip()
+
+    if msg_text.startswith('/'):
+        await dp.message.filter(F.text == msg_text, message)
+        return
+
     company_id = await get_company_id_by_name(session, name=msg_text)
     company_data = await get_company_url_by_id(session, company_id)
     await state.update_data(company_id=company_id)

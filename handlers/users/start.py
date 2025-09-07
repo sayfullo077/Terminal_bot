@@ -38,13 +38,10 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
         else:
             await message.answer("Siz tizimga kirolmaysiz!\nAdmin bilan bog'laning /feedback")
     else:
-        if is_bot_admin:
-            await state.clear()
-        else:
-            await message.answer(
-                f"Assalomu alaykum {full_name}\n🏦 Bosh ofis nomini kiriting:"
-            )
-            await state.set_state(UserStart.is_active)
+        await message.answer(
+            f"Assalomu alaykum {full_name}\n🏦 Bosh ofis nomini kiriting:"
+        )
+        await state.set_state(UserStart.is_active)
 
 
 @dp.message(UserStart.is_active)
@@ -53,8 +50,8 @@ async def choose_company(message: types.Message, state: FSMContext, session: Asy
     user = await select_user(telegram_id, session)
     msg_text = message.text.strip()
 
-    if msg_text.startswith('/'):
-        await dp.message.filter(F.text == msg_text, message)
+    if msg_text == "/admin" and str(message.from_user.id) in ADMINS:
+        await state.clear()
         return
 
     company_id = await get_company_id_by_name(session, name=msg_text)

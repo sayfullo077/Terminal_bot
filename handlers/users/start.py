@@ -12,7 +12,9 @@ from database.orm_query import get_branch_id_by_company_id, select_user, orm_add
 from states.my_states import UserStart
 from data.config import ADMINS
 import logging
-
+from handlers.users.help import help_bot
+from handlers.users.feedback import exit_bot, ask_for_feedback
+from handlers.admin.admin_core import start_admin_panel
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +28,6 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
     telegram_id = message.from_user.id
     full_name = html_escape(message.from_user.full_name)
     user = await select_user(telegram_id, session)
-    is_bot_admin = str(telegram_id) in ADMINS
     if user is not None:
         await state.set_state(UserStart.start)
         is_active = await is_user_active(telegram_id, session)
@@ -47,12 +48,30 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
 @dp.message(UserStart.is_active)
 async def choose_company(message: types.Message, state: FSMContext, session: AsyncSession):
     telegram_id = message.from_user.id
-    user = await select_user(telegram_id, session)
     msg_text = message.text.strip()
 
-    if msg_text == "/admin" and str(message.from_user.id) in ADMINS:
-        await state.clear()
-        return
+    if msg_text.startswith('/'):
+        command = msg_text.split()[0]
+        if command == "/admin":
+            await state.clear()
+            if str(telegram_id) in ADMINS:
+                await state.clear()
+                await start_admin_panel(message, state, session)
+            else:
+                await message.answer("Bu buyruq faqat adminlar uchun!")
+            return
+
+        if command == "/help":
+            await help_bot(message)
+            return
+
+        if command == "/exit":
+            await exit_bot(message, state, session)
+            return
+
+        if command == "/feedback":
+            await ask_for_feedback(message, state, session)
+            return
 
     company_id = await get_company_id_by_name(session, name=msg_text)
     company_data = await get_company_url_by_id(session, company_id)

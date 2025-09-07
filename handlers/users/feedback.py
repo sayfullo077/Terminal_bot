@@ -42,7 +42,7 @@ async def ask_for_feedback(message: Message, state: FSMContext):
 
 
 @dp.message(Command("exit"))
-async def ask_for_feedback(message: Message, session: AsyncSession):
+async def exit_bot(message: Message, session: AsyncSession):
     telegram_id = message.from_user.id
     await orm_delete_by_id(session, telegram_id)
     await message.answer("Tizimdan chiqdingiz")

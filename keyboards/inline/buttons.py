@@ -1,10 +1,8 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.filters.callback_data import CallbackData
-from sqlalchemy.ext.asyncio import AsyncSession
-from aiogram.fsm.context import FSMContext
 from typing import List
 from database.models import CardTransaction
-from aiogram import types
+from math import ceil
 
 
 class ChooseLanguageCallback(CallbackData, prefix='ikb01'):
@@ -75,6 +73,14 @@ async def cashier_menu_button():
     return btn.as_markup()
 
 
+async def chief_cashier_menu_button():
+    btn = InlineKeyboardBuilder()
+    btn.button(text="﹩ Balans", callback_data="balance_info")
+    btn.button(text="⎘ Sverkalar ro'yxati", callback_data="cash_list")
+    btn.adjust(1)
+    return btn.as_markup()
+
+
 async def choose_terminal_button():
     btn = InlineKeyboardBuilder()
     btn.button(text="💳 Uzcard", callback_data="uz_card")
@@ -120,44 +126,99 @@ def create_pagination_keyboard(
         current_page: int,
         page_size: int = 5
 ):
-    """
-    Tranzaksiyalar uchun paginatsiyali inline klaviatura yaratadi.
-    Tugmalar: [⬅️ Orqaga] [joriy_sahifa/jami_sahifa] [➡️ Oldinga]
-    """
     total_transactions = len(transactions)
     total_pages = (total_transactions + page_size - 1) // page_size
-
     start_index = current_page * page_size
     end_index = min(start_index + page_size, total_transactions)
-
     keyboard = InlineKeyboardBuilder()
 
-    # Tranzaksiya tugmalarini har biri alohida qatorga joylashtirish
     for i in range(start_index, end_index):
         transaction = transactions[i]
         name = f"№ {transaction.transaction_id} | {transaction.amount} so'm"
         callback_data = f"view_transaction:{transaction.id}"
         keyboard.add(InlineKeyboardButton(text=name, callback_data=callback_data))
 
-    # Tranzaksiya tugmalarini har bir qatorga bittadan qilib taqsimlash
     keyboard.adjust(1)
-
-    # Navigatsiya tugmalari uchun alohida qator yaratish
     nav_buttons = []
-
-    # Birinchi sahifada bo'lmasa, "Orqaga" tugmasini qo'shish
     if current_page > 0:
         nav_buttons.append(InlineKeyboardButton(text="⬅️ Orqaga", callback_data=f"page:{current_page - 1}"))
 
-    # Har doim sahifa raqamini ko'rsatish
     nav_buttons.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="none"))
 
-    # Oxirgi sahifada bo'lmasa, "Oldinga" tugmasini qo'shish
     if current_page < total_pages - 1:
         nav_buttons.append(InlineKeyboardButton(text="➡️ Oldinga", callback_data=f"page:{current_page + 1}"))
 
-    # Navigatsiya tugmalarini bir qatorga joylashtirish, faqat agar ular mavjud bo'lsa
     if nav_buttons:
         keyboard.row(*nav_buttons)
 
     return keyboard.as_markup()
+
+
+def build_cash_pagination_keyboard(all_cash: list, all_terminal: list, page: int = 1, per_page: int = 7):
+    all_cashiers = []
+
+    for cash in all_cash:
+        cash_name = cash.get("cash_name")
+        cash_id = cash.get("cash_id")
+        if cash_name and cash_id is not None:
+            all_cashiers.append({
+                "cash_name": cash_name,
+                "cash_id": cash_id,
+                "cash_type": "naqd"
+            })
+
+    for terminal in all_terminal:
+        cash_name = terminal.get("cash_name")
+        cash_id = terminal.get("cash_id")
+        if cash_name and cash_id is not None:
+            all_cashiers.append({
+                "cash_name": cash_name,
+                "cash_id": cash_id,
+                "cash_type": "terminal"
+            })
+    
+    total_items = len(all_cashiers)
+    total_pages = ceil(total_items / per_page)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    current_page_items = all_cashiers[start:end]
+    
+    keyboard = []
+
+    for cash in current_page_items:
+        cash_name = cash.get("cash_name")
+        cash_id = cash.get("cash_id")
+        cash_type = cash.get("cash_type")
+        
+        if cash_type == "naqd":
+            text = f"💵 {cash_name}"
+            callback_data = f"cash_naqd:{cash_id}"
+        else:  # terminal
+            text = f"💳 {cash_name}"
+            callback_data = f"cash_terminal:{cash_id}"
+            
+        keyboard.append([InlineKeyboardButton(text=text, callback_data=callback_data)])
+
+    nav_buttons = []
+
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="⏮️ Bosh", callback_data="cash_page:1"))
+
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"cash_page:{page-1}"))
+
+    nav_buttons.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="none"))
+
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"cash_page:{page+1}"))
+
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="Oxirgi ⏭️", callback_data=f"cash_page:{total_pages}"))
+
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    keyboard.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

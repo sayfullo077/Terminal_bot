@@ -20,17 +20,15 @@ class UserState(StatesGroup):
 
 class TransactionState(StatesGroup):
     transaction_menu = State()
-    photo = State()
-    comment = State()
+    transfer_photo = State()
+    transfer_comment = State()
+    transfer_amount = State()
+    select_destination = State()
+    confirm_transfer = State()
+    pending_chief_cashier = State()
     select_cash = State()
     confirm = State()
-    check = State()
-    transfer_amount = State()  # New state for transfer amount input
-    select_destination = State()  # New state for selecting destination cash register
-    confirm_transfer = State()  # New state for confirming transfer
-    pending_chief_cashier = State()  # New state for waiting chief cashier confirmation
-    transfer_photo = State()  # New state for transfer photo input
-    transfer_comment = State()  # New state for transfer comment input
+    cash_pagination = State()
 
 
 class TextAdd(StatesGroup):

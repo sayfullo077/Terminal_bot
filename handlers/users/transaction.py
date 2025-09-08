@@ -6,7 +6,7 @@ from loader import dp, bot
 from aiogram.types import ContentType
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from utils.password_generator import generate_unique_number
-from keyboards.inline.buttons import back_button, cashier_menu_button, user_confirm_button, cashier_confirm_button
+from keyboards.inline.buttons import back_button, cashier_menu_button, user_confirm_button, cashier_confirm_button, build_cash_pagination_keyboard
 from states.my_states import UserStart, TransactionState
 from database.orm_query import (
     select_user, get_company_name_by_id, get_terminals_url_by_id, orm_add_transaction, get_user_full_name_by_id,
@@ -56,36 +56,8 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
             await call.message.edit_text("❗️ Kassalar topilmadi")
             return
 
-        await state.update_data(all_cash=all_cash, all_terminal=all_terminal, branch_id=branch_id, company_id=company_id, full_name=full_name)
-
-        keyboard_buttons = []
-
-        # Safely access dictionary keys using .get()
-        for cash in all_cash:
-            cash_name = cash.get("cash_name")
-            cash_id = cash.get("cash_id")
-            if cash_name and cash_id is not None:
-                keyboard_buttons.append(
-                    [InlineKeyboardButton(
-                        text=f"💵 {cash_name}",
-                        callback_data=f"cash_naqd:{cash_id}"
-                    )]
-                )
-
-        for terminal in all_terminal:
-            cash_name = terminal.get("cash_name")
-            cash_id = terminal.get("cash_id")
-            if cash_name and cash_id is not None:
-                keyboard_buttons.append(
-                    [InlineKeyboardButton(
-                        text=f"💳 {cash_name}",
-                        callback_data=f"cash_terminal:{cash_id}"
-                    )]
-                )
-
-        keyboard_buttons.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-
+        await state.update_data(all_cash=all_cash, all_terminal=all_terminal, branch_id=branch_id, company_id=company_id, full_name=full_name, current_page=1)
+        keyboard = build_cash_pagination_keyboard(all_cash, all_terminal, page=1, per_page=7)
         await call.message.edit_text(f"❖ Kassani tanlang:", reply_markup=keyboard)
 
     except httpx.HTTPStatusError as e:
@@ -98,10 +70,34 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
         await call.message.edit_text("❗️ Kassalarni olishda kutilmagan xatolik yuz berdi")
         print(f"Unexpected error: {e}")
 
-    await state.set_state(TransactionState.transaction_menu)
+    await state.set_state(TransactionState.cash_pagination)
 
 
-@dp.callback_query(F.data.startswith(("cash_naqd:", "cash_terminal:")), TransactionState.transaction_menu)
+@dp.callback_query(F.data.startswith("cash_page:"), TransactionState.cash_pagination)
+async def handle_cash_pagination(call: types.CallbackQuery, state: FSMContext):
+    try:
+        page = int(call.data.split(":")[1])
+        data = await state.get_data()
+        all_cash = data.get("all_cash", [])
+        all_terminal = data.get("all_terminal", [])
+        
+        # Yangi keyboard yaratish
+        keyboard = build_cash_pagination_keyboard(all_cash, all_terminal, page=page, per_page=7)
+        
+        # State ma'lumotlarini yangilash
+        await state.update_data(current_page=page)
+        
+        # Xabarni yangilash
+        await call.message.edit_text(f"❖ Kassani tanlang:", reply_markup=keyboard)
+        
+    except (ValueError, IndexError):
+        await call.answer("❗️ Sahifa raqami noto'g'ri", show_alert=True)
+    except Exception as e:
+        print(f"Pagination error: {e}")
+        await call.answer("❗️ Xatolik yuz berdi", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith(("cash_naqd:", "cash_terminal:")), TransactionState.cash_pagination)
 async def cash_detail(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
     data_parts = call.data.split(":")
     cash_type = data_parts[0]
@@ -297,7 +293,6 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
     source_cash_id = data.get('source_cash_id')
     company_name = await get_company_name_by_id(session, company_id)
     transaction_id = await generate_unique_number()
-    print("Generated transaction_id: ", transaction_id)
     cash_type = 'TERMINAL' if source_cash_type == 'cash_terminal' else 'CASH'
     cashier_menu_btn = await cashier_menu_button()
 
@@ -313,7 +308,7 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
 
     await call.message.delete()
     await call.message.answer(
-        f"☕︎<i> Tekshirilmoqda\nBosh kassirlar tasdiqlashini kuting</i>", reply_markup=cashier_menu_btn
+        f"<i>№ Sverka ID: {transaction_id} Tekshirilmoqda\nBosh kassirlar tasdiqlashini kuting ☕︎</i>", reply_markup=cashier_menu_btn
     )
     try:
         await orm_add_transaction(
@@ -335,26 +330,25 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
     except Exception as e:
         print(f"❗️ Sverka saqlashda xato: {e}")
 
-    print("Branch ID: ", branch_id)
-    print("BranchDB ID: ", db_branch_id)
 
     get_transactions_link = await get_branch_get_transaction_url_by_id(session=session, branch_id=db_branch_id)
-    print("Sverka list: ", get_transactions_link)
+
     if not get_transactions_link:
         await call.message.answer("❗️ API URL topilmadi", reply_markup=cashier_menu_btn)
         return
 
     await state.set_state(TransactionState.transaction_menu)
-
-    text = f"✔︎ <i>Sverka tasdiqlandi</i>"
+    
     json_data = {
         "cash_id": source_cash_id,
         "cash_name": source_cash_name,
         "image": None,  # Default to None
-        "amount": transfer_amount,
+        "amount": int(transfer_amount),  # Decimal ni int ga o'zgartirish
         "comment": transfer_comment,
-        "transaction_id": transaction_id
+        "transaction_id": str(transaction_id)  # String sifatida yuborish
     }
+    
+    print(f"Debug - JSON data: {json_data}")
 
     if transfer_image:
         try:
@@ -383,13 +377,11 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
 
         cashier_menu_btn = await cashier_menu_button()
         if response.status_code == 200:
-            await call.message.answer(text + "\n\n<i>1C ga muvaffaqiyatli yuborildi!</i>",
-                                      reply_markup=cashier_menu_btn)
-
+            print("1Cga muvaffaqiyatli yuborildi !")
             await state.set_state(TransactionState.transaction_menu)
 
         elif response.status_code == 400:
-            await call.message.answer(text + "\n\n✖︎ <i>1C ga yuborishda xatolik yuz berdi</i>",
+            await call.message.answer("✖︎ <i>1C ga yuborishda xatolik yuz berdi</i>",
                                       reply_markup=cashier_menu_btn)
 
         else:
@@ -420,8 +412,6 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
         for document in documents:
             transaction_id = document['transaction_id']
             doc_id = document["number"]
-
-            print("IDsi: ", transaction_id)
             keyboard_buttons.append(
                 [InlineKeyboardButton(
                     text=f"﹩ {document['branchSender']}",
@@ -452,15 +442,18 @@ async def confirm_chief_cashier_check(call: types.CallbackQuery, state: FSMConte
 
 
 @dp.callback_query(F.data.startswith("sverka:"))
-async def confirm_chief_cashier_menu(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+async def confirm_chief_cashier_menu(call: types.CallbackQuery, session: AsyncSession):
     telegram_id = call.from_user.id
     parts = call.data.split(':')
     data_parts = parts[1].split('|')
     transaction_id = data_parts[0]
     doc_id = data_parts[1]
-
     transaction = await get_transaction_by_id(session, transaction_id)
-    print("Transfer: ", transaction, transaction_id)
+
+    if not transaction:
+        await call.message.answer("Sverka ID topilmadi")
+        return
+
     company_id = transaction.company_id
     branch_id = transaction.branch_id
     source_cash_name = transaction.sender_terminal_name
@@ -514,15 +507,13 @@ async def chief_cashier_confirms_transaction(call: types.CallbackQuery, state: F
     login = user.login
     password = user.password
     user_1c_id = user.user_1c_id
-    print("Bu transfer id: ", transaction_id)
     await orm_complete_transaction(session, transaction_id)
     transaction = await get_transaction_by_id(session, transaction_id)
     branch_id = transaction.branch_id
     await state.set_state(UserStart.start)
     try:
         transaction_url = await get_branch_confirm_transaction_url_by_id(session, branch_id)
-        print("Sverka URL: ", transaction_url)
-        text = f"✔︎ <i>Sverka tasdiqlandi</i>"
+        text = f"✔︎ <i>Sverka bosh kassirlarga tekshirish uchun yuborildi</i>"
 
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
@@ -534,8 +525,6 @@ async def chief_cashier_confirms_transaction(call: types.CallbackQuery, state: F
         if response.status_code == 200:
             await call.message.delete()
             await call.message.answer(f"<b>№ {transaction_id}</b> - raqamli sverka tasdiqlandi")
-            await call.message.answer(text + "\n\n<i>1C ga muvaffaqiyatli yuborildi!</i>",
-                                      reply_markup=cashier_menu_btn)
             sender_terminal_id = transaction.sender_terminal_id
             await bot.send_message(chat_id=sender_terminal_id,
                                    text=f"<b>№ {transaction_id}</b> - raqamli sverka tasdiqlandi")

@@ -4,9 +4,9 @@ from aiogram.filters import or_f
 from aiogram import types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from keyboards.inline.buttons import position_button, back_button, cashier_menu_button
+from keyboards.inline.buttons import position_button, back_button, cashier_menu_button, build_cash_pagination_keyboard
 from states.my_states import UserStart, TransactionState
-from database.orm_query import select_user, get_company_url_by_id, get_terminals_url_by_id, has_pending_transaction
+from database.orm_query import select_user, get_company_url_by_id, get_terminals_url_by_id
 from .feedback import UserMessageState
 import re
 import httpx
@@ -17,7 +17,7 @@ def html_escape(text):
     return re.sub(r'[&<>"\']', lambda match: escape_chars[match.group(0)], text)
 
 
-@dp.callback_query(F.data.startswith("back"), or_f(TransactionState.transfer_comment, TransactionState.transfer_photo, UserMessageState.waiting_for_message, UserStart.cash_detail, TransactionState.comment, UserStart.company, UserStart.start, UserStart.branch, UserStart.password, UserStart.selected_user, UserStart.cashier_menu, TransactionState.transaction_menu, TransactionState.transfer_amount))
+@dp.callback_query(F.data.startswith("back"), or_f(TransactionState.transfer_comment, TransactionState.transfer_photo, UserMessageState.waiting_for_message, UserStart.cash_detail, TransactionState.transfer_comment, UserStart.company, UserStart.start, UserStart.branch, UserStart.password, UserStart.selected_user, UserStart.cashier_menu, TransactionState.transaction_menu, TransactionState.transfer_amount, TransactionState.cash_pagination))
 async def transaction_func(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
     current_state = await state.get_state()
     telegram_id = call.from_user.id
@@ -26,7 +26,8 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
         UserStart.company,
         UserStart.cashier_menu,
         TransactionState.transaction_menu,
-        UserMessageState.waiting_for_message
+        UserMessageState.waiting_for_message,
+        TransactionState.cash_pagination
         ]:
         await state.set_state(UserStart.start)
         user = await select_user(telegram_id, session)
@@ -108,7 +109,7 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.get(
                     terminals_url,
-                    params={"branch_id": branch_id, "user_id": user_id},
+                    params={"user_id": user_id},
                     auth=(login, password),
                 )
                 response.raise_for_status()
@@ -122,40 +123,21 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
                 return
 
             await state.update_data(all_cash=all_cash, all_terminal=all_terminal, branch_id=branch_id,
-                                    company_id=company_id, full_name=full_name)
-
-            keyboard_buttons = []
-
-            for cash in all_cash:
-                keyboard_buttons.append(
-                    [InlineKeyboardButton(
-                        text=f"💵 {cash['cash_name']}",
-                        callback_data=f"cash_naqd:{cash['cash_id']}"
-                    )]
-                )
-
-            for terminal in all_terminal:
-                keyboard_buttons.append(
-                    [InlineKeyboardButton(
-                        text=f"💳 {terminal['cash_name']}",
-                        callback_data=f"cash_terminal:{terminal['cash_id']}"
-                    )]
-                )
-
-            keyboard_buttons.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
-            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-
+                                    company_id=company_id, full_name=full_name, current_page=1)
+            keyboard = build_cash_pagination_keyboard(all_cash, all_terminal, page=1, per_page=7)
             await call.message.edit_text(f"❖ Kassani tanlang:", reply_markup=keyboard)
 
         except httpx.HTTPStatusError as e:
             await call.message.edit_text(f"❗️ Server xatosi: {e.response.status_code}")
-        except httpx.RequestError:
+        except httpx.RequestError as e:
             await call.message.edit_text("❗️ Serverga ulanib bo'lmadi")
+            print(f"HTTPX Request Error: {e}")
         except Exception as e:
-            await call.message.edit_text("❗️ Kassalarni olishda xatolik yuz berdi")
+            # This will now catch other errors like JSONDecodeError, KeyError, etc.
+            await call.message.edit_text("❗️ Kassalarni olishda kutilmagan xatolik yuz berdi")
             print(f"Unexpected error: {e}")
 
-        await state.set_state(TransactionState.transaction_menu)
+        await state.set_state(TransactionState.cash_pagination)
 
     elif current_state == TransactionState.transfer_photo:
         data = await state.get_data()
@@ -178,7 +160,7 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
         await state.update_data(last_msg=msg.message_id)
         await state.set_state(TransactionState.transfer_amount)
 
-    elif current_state == TransactionState.comment:
+    elif current_state == TransactionState.transfer_comment:
         data = await state.get_data()
         source_cash_name = data.get('source_cash_name')
         source_cash_type = data.get('source_cash_type')

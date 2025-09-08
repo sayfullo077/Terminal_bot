@@ -862,3 +862,18 @@ async def delete_transaction_by_id(session: AsyncSession, transaction_id: str) -
         print(f"Tranzaksiya ID {transaction_id} topilmadi.")
 
     await session.commit()
+
+
+async def get_pending_transactions_by_company_id(
+    session: AsyncSession,
+    company_id: int
+) -> List[CardTransaction]:
+    stmt = (
+        select(CardTransaction)
+        .where(
+            CardTransaction.company_id == company_id,
+            CardTransaction.status_type == StatusType.PENDING
+        )
+    )
+    result = await session.execute(stmt)
+    return result.scalars().all()

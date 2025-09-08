@@ -7,8 +7,9 @@ from aiogram import types, F
 from sqlalchemy.ext.asyncio import AsyncSession
 from loader import dp
 from utils.password_generator import generate_unique_number
-from keyboards.inline.buttons import back_button, position_button, check_password_button, cashier_menu_button
+from keyboards.inline.buttons import back_button, position_button, check_password_button, cashier_menu_button, chief_cashier_menu_button
 from database.orm_query import get_branch_id_by_company_id, select_user, orm_add_user, get_company_id_by_name, get_cashier_by_id, get_company_url_by_id, get_chief_cashier_by_id, get_pass_url_by_id, is_user_active
+from database.models import UserType
 from states.my_states import UserStart
 from data.config import ADMINS
 import logging
@@ -31,13 +32,24 @@ async def start_bot(message: types.Message, state: FSMContext, session: AsyncSes
     if user is not None:
         await state.set_state(UserStart.start)
         is_active = await is_user_active(telegram_id, session)
-        if is_active:
-            cashier_menu_btn = await cashier_menu_button()
-            await message.answer(
-                f"<b>Assalomu alaykum</b> <i>{full_name}</i>.\nMenyuni tanlang", reply_markup=cashier_menu_btn
-            )
-        else:
-            await message.answer("Siz tizimga kirolmaysiz!\nAdmin bilan bog'laning /feedback")
+        cashier_menu_btn = await cashier_menu_button()
+        await message.answer(
+            f"<b>Assalomu alaykum</b> <i>{full_name}</i>.\nMenyuni tanlang", reply_markup=cashier_menu_btn
+        )
+        # if is_active:
+        #     cashier = user.user_type
+        #     if cashier == UserType.CHIEF_CASHIER:
+        #         cashier_menu_btn = await chief_cashier_menu_button()
+        #         await message.answer(
+        #             f"<b>Assalomu alaykum</b> <i>{full_name}</i>.\nMenyuni tanlang", reply_markup=cashier_menu_btn
+        #         )
+        #     else:
+        #         cashier_menu_btn = await cashier_menu_button()
+        #         await message.answer(
+        #             f"<b>Assalomu alaykum</b> <i>{full_name}</i>.\nMenyuni tanlang", reply_markup=cashier_menu_btn
+        #         )
+        # else:
+        #     await message.answer("Siz tizimga kirolmaysiz!\nAdmin bilan bog'laning /feedback")
     else:
         await message.answer(
             f"Assalomu alaykum {full_name}\n🏦 Bosh ofis nomini kiriting:"

@@ -4,8 +4,8 @@ from aiogram.filters import or_f
 from aiogram import types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from keyboards.inline.buttons import position_button, back_button, cashier_menu_button, build_cash_pagination_keyboard
-from states.my_states import UserStart, TransactionState
+from keyboards.inline.buttons import position_button, back_button, cashier_menu_button, build_cash_pagination_keyboard, build_balance_pagination_keyboard
+from states.my_states import UserStart, TransactionState, BalanceState
 from database.orm_query import select_user, get_company_url_by_id, get_terminals_url_by_id
 from .feedback import UserMessageState
 import re
@@ -17,7 +17,7 @@ def html_escape(text):
     return re.sub(r'[&<>"\']', lambda match: escape_chars[match.group(0)], text)
 
 
-@dp.callback_query(F.data.startswith("back"), or_f(TransactionState.transfer_comment, TransactionState.transfer_photo, UserMessageState.waiting_for_message, UserStart.cash_detail, TransactionState.transfer_comment, UserStart.company, UserStart.start, UserStart.branch, UserStart.password, UserStart.selected_user, UserStart.cashier_menu, TransactionState.transaction_menu, TransactionState.transfer_amount, TransactionState.cash_pagination))
+@dp.callback_query(F.data.startswith("back"), or_f(BalanceState.balance_detail, BalanceState.balance_pagination, TransactionState.transfer_comment, TransactionState.transfer_photo, UserMessageState.waiting_for_message, UserStart.cash_detail, TransactionState.transfer_comment, UserStart.company, UserStart.start, UserStart.branch, UserStart.password, UserStart.selected_user, UserStart.cashier_menu, TransactionState.transaction_menu, TransactionState.transfer_amount, TransactionState.cash_pagination))
 async def transaction_func(call: types.CallbackQuery, state: FSMContext, session: AsyncSession):
     current_state = await state.get_state()
     telegram_id = call.from_user.id
@@ -27,7 +27,8 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
         UserStart.cashier_menu,
         TransactionState.transaction_menu,
         UserMessageState.waiting_for_message,
-        TransactionState.cash_pagination
+        TransactionState.cash_pagination,
+        BalanceState.balance_pagination
         ]:
         await state.set_state(UserStart.start)
         user = await select_user(telegram_id, session)
@@ -262,6 +263,59 @@ async def transaction_func(call: types.CallbackQuery, state: FSMContext, session
             print(f"Unexpected error: {e}")
 
         await state.set_state(UserStart.cashier_menu)
+
+    elif current_state == BalanceState.balance_detail:
+        telegram_id = call.from_user.id
+        user = await select_user(telegram_id, session)
+
+        if not user:
+            await call.message.edit_text("❗️ Foydalanuvchi topilmadi")
+            return
+
+        user_id = user.user_1c_id
+        branch_id = user.branch_id
+        company_id = user.company_id
+
+        terminals_data = await get_terminals_url_by_id(session, company_id)
+        if not terminals_data:
+            await call.message.edit_text("❗️ Kassalar URL topilmadi")
+            return
+
+        terminals_url, login, password = terminals_data
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    terminals_url,
+                    params={"branch_id": branch_id, "user_id": user_id},
+                    auth=(login, password),
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            all_cash = data.get("cash", [])
+            all_terminal = data.get("terminal", [])
+
+            if not (all_cash or all_terminal):
+                await call.message.edit_text("❗️ Kassalar topilmadi")
+                return
+
+            await state.update_data(all_cash=all_cash, all_terminal=all_terminal, current_page=1)
+
+            # Paginatsiya bilan keyboard yaratish
+            keyboard = build_balance_pagination_keyboard(all_cash, all_terminal, page=1, per_page=7)
+
+            await call.message.edit_text("❖ Kassani tanlang:", reply_markup=keyboard)
+
+        except httpx.HTTPStatusError as e:
+            await call.message.edit_text(f"❗️ Server xatosi: {e.response.status_code}")
+        except httpx.RequestError:
+            await call.message.edit_text("❗️ Serverga ulanib bo‘lmadi")
+        except Exception as e:
+            await call.message.edit_text("❗️ Kassalarni olishda xatolik yuz berdi")
+            print(f"Unexpected error: {e}")
+
+        await state.set_state(BalanceState.balance_pagination)
 
 
 

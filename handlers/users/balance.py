@@ -2,10 +2,10 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import types, F
-from aiogram.filters import or_f
 from loader import dp
-from states.my_states import UserStart, TransactionState
+from states.my_states import BalanceState
 from database.orm_query import select_user, get_terminals_url_by_id
+from keyboards.inline.buttons import build_balance_pagination_keyboard
 import httpx
 
 
@@ -46,28 +46,10 @@ async def balance_info(call: types.CallbackQuery, state: FSMContext, session: As
             await call.message.edit_text("❗️ Kassalar topilmadi")
             return
 
-        await state.update_data(all_cash=all_cash, all_terminal=all_terminal)
+        await state.update_data(all_cash=all_cash, all_terminal=all_terminal, current_page=1)
 
-        keyboard_buttons = []
-
-        for cash in all_cash:
-            keyboard_buttons.append(
-                [InlineKeyboardButton(
-                    text=f"💵 {cash['cash_name']}",
-                    callback_data=f"cash_naqd:{cash['cash_id']}"
-                )]
-            )
-
-        for terminal in all_terminal:
-            keyboard_buttons.append(
-                [InlineKeyboardButton(
-                    text=f"💳 {terminal['cash_name']}",
-                    callback_data=f"cash_terminal:{terminal['cash_id']}"
-                )]
-            )
-
-        keyboard_buttons.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        # Paginatsiya bilan keyboard yaratish
+        keyboard = build_balance_pagination_keyboard(all_cash, all_terminal, page=1, per_page=7)
 
         await call.message.edit_text("❖ Kassani tanlang:", reply_markup=keyboard)
 
@@ -79,21 +61,46 @@ async def balance_info(call: types.CallbackQuery, state: FSMContext, session: As
         await call.message.edit_text("❗️ Kassalarni olishda xatolik yuz berdi")
         print(f"Unexpected error: {e}")
 
-    await state.set_state(UserStart.cashier_menu)
+    await state.set_state(BalanceState.balance_pagination)
 
 
-@dp.callback_query(F.data.startswith(("cash_naqd:", "cash_terminal:")), UserStart.cashier_menu)
-async def cash_detail(call: types.CallbackQuery, state: FSMContext):
+@dp.callback_query(F.data.startswith("balance_page:"), BalanceState.balance_pagination)
+async def handle_balance_pagination(call: types.CallbackQuery, state: FSMContext):
+    """Balance kassalar paginatsiyasini boshqarish"""
+    try:
+        page = int(call.data.split(":")[1])
+        data = await state.get_data()
+        all_cash = data.get("all_cash", [])
+        all_terminal = data.get("all_terminal", [])
+        
+        # Yangi keyboard yaratish
+        keyboard = build_balance_pagination_keyboard(all_cash, all_terminal, page=page, per_page=7)
+        
+        # State ma'lumotlarini yangilash
+        await state.update_data(current_page=page)
+        
+        # Xabarni yangilash
+        await call.message.edit_text("❖ Kassani tanlang:", reply_markup=keyboard)
+        
+    except (ValueError, IndexError):
+        await call.answer("❗️ Sahifa raqami noto'g'ri", show_alert=True)
+    except Exception as e:
+        print(f"Balance pagination error: {e}")
+        await call.answer("❗️ Xatolik yuz berdi", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith(("balance_naqd:", "balance_terminal:")), BalanceState.balance_pagination)
+async def balance_cash_detail(call: types.CallbackQuery, state: FSMContext):
     data_parts = call.data.split(":")
     cash_type = data_parts[0]
     cash_id = int(data_parts[1])
 
     data = await state.get_data()
 
-    if cash_type == "cash_naqd":
+    if cash_type == "balance_naqd":
         all_cash = data.get("all_cash", [])
         cash_info = next((c for c in all_cash if c["cash_id"] == cash_id), None)
-    elif cash_type == "cash_terminal":
+    elif cash_type == "balance_terminal":
         all_terminal = data.get("all_terminal", [])
         cash_info = next((c for c in all_terminal if c["cash_id"] == cash_id), None)
     else:
@@ -117,4 +124,4 @@ async def cash_detail(call: types.CallbackQuery, state: FSMContext):
     )
 
     await call.message.edit_text(text, reply_markup=back_btn)
-    await state.set_state(UserStart.cash_detail)
+    await state.set_state(BalanceState.balance_detail)

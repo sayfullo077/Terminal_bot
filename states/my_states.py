@@ -31,6 +31,11 @@ class TransactionState(StatesGroup):
     cash_pagination = State()
 
 
+class BalanceState(StatesGroup):
+    balance_pagination = State()
+    balance_detail = State()
+
+
 class TextAdd(StatesGroup):
     text = State()
     url = State()

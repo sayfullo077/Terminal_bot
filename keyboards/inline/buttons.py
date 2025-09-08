@@ -222,3 +222,76 @@ def build_cash_pagination_keyboard(all_cash: list, all_terminal: list, page: int
     keyboard.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def build_balance_pagination_keyboard(all_cash: list, all_terminal: list, page: int = 1, per_page: int = 7):
+    """
+    Balance uchun kassalar ro'yxatini paginatsiya qilib InlineKeyboard qaytaradi.
+    """
+    all_cashiers = []
+
+    for cash in all_cash:
+        cash_name = cash.get("cash_name")
+        cash_id = cash.get("cash_id")
+        if cash_name and cash_id is not None:
+            all_cashiers.append({
+                "cash_name": cash_name,
+                "cash_id": cash_id,
+                "cash_type": "naqd"
+            })
+
+    for terminal in all_terminal:
+        cash_name = terminal.get("cash_name")
+        cash_id = terminal.get("cash_id")
+        if cash_name and cash_id is not None:
+            all_cashiers.append({
+                "cash_name": cash_name,
+                "cash_id": cash_id,
+                "cash_type": "terminal"
+            })
+
+    total_items = len(all_cashiers)
+    total_pages = ceil(total_items / per_page)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    current_page_items = all_cashiers[start:end]
+    
+    keyboard = []
+
+    for cash in current_page_items:
+        cash_name = cash.get("cash_name")
+        cash_id = cash.get("cash_id")
+        cash_type = cash.get("cash_type")
+        
+        if cash_type == "naqd":
+            text = f"💵 {cash_name}"
+            callback_data = f"balance_naqd:{cash_id}"
+        else:  # terminal
+            text = f"💳 {cash_name}"
+            callback_data = f"balance_terminal:{cash_id}"
+            
+        keyboard.append([InlineKeyboardButton(text=text, callback_data=callback_data)])
+
+    nav_buttons = []
+
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="⏮️ Bosh", callback_data="balance_page:1"))
+
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"balance_page:{page-1}"))
+
+    nav_buttons.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="none"))
+
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"balance_page:{page+1}"))
+
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="Oxirgi ⏭️", callback_data=f"balance_page:{total_pages}"))
+
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    keyboard.append([InlineKeyboardButton(text="◁ Orqaga", callback_data="back")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
